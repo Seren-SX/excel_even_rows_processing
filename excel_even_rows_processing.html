@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel双数行处理器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px 20px;
+            margin: 30px 0;
+            background: rgba(102, 126, 234, 0.05);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: rgba(118, 75, 162, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: rgba(118, 75, 162, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 4em;
+            color: #667eea;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .processing {
+            display: none;
+            color: #667eea;
+            font-size: 1.1em;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .preview {
+            margin-top: 30px;
+            text-align: left;
+            display: none;
+        }
+
+        .preview h3 {
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        tr:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .stats {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .stats-item {
+            display: inline-block;
+            margin: 0 20px;
+            font-size: 1.1em;
+            color: #333;
+        }
+
+        .stats-number {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 1.3em;
+        }
+
+        .alert {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .alert-success {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            color: #155724;
+        }
+
+        .alert-error {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Excel双数行处理器</h1>
+        <p style="color: #666; margin-bottom: 30px;">将Excel文件中双数行的内容移动到上一行的B列</p>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">拖拽Excel文件到这里，或点击选择文件</div>
+            <div style="color: #999; font-size: 0.9em;">支持 .xlsx 和 .xls 格式</div>
+            <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" />
+        </div>
+
+        <div class="processing" id="processing">
+            <div class="spinner"></div>
+            正在处理文件...
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <div class="preview" id="preview">
+            <h3>处理结果预览</h3>
+            <div class="stats" id="stats"></div>
+            <div class="table-container">
+                <table id="resultTable">
+                    <thead>
+                        <tr>
+                            <th>行号</th>
+                            <th>A列</th>
+                            <th>B列</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn" id="downloadBtn">📥 下载处理后的文件</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let processedData = null;
+        let originalFileName = '';
+
+        // 文件上传区域事件
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const processing = document.getElementById('processing');
+        const preview = document.getElementById('preview');
+        const alertContainer = document.getElementById('alertContainer');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('dragleave', handleDragLeave);
+        uploadArea.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                processFile(file);
+            }
+        }
+
+        function showAlert(message, type = 'success') {
+            alertContainer.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 5000);
+        }
+
+        function processFile(file) {
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                showAlert('请选择有效的Excel文件 (.xlsx 或 .xls)', 'error');
+                return;
+            }
+
+            originalFileName = file.name.replace(/\.(xlsx|xls)$/i, '');
+            processing.style.display = 'block';
+            preview.style.display = 'none';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+                    // 获取A列数据
+                    const columnA = jsonData.map(row => row[0] || '').filter((value, index) => 
+                        value !== '' || index < jsonData.length - 1
+                    );
+
+                    // 处理数据
+                    const processedResult = processData(columnA);
+                    processedData = processedResult;
+
+                    // 显示结果
+                    displayResults(processedResult, columnA.length);
+                    processing.style.display = 'none';
+                    preview.style.display = 'block';
+
+                    showAlert(`文件处理完成！原始 ${columnA.length} 行，处理后 ${processedResult.length} 行`);
+
+                } catch (error) {
+                    processing.style.display = 'none';
+                    showAlert('文件处理失败：' + error.message, 'error');
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processData(columnA) {
+            const result = [];
+            
+            for (let i = 0; i < columnA.length; i += 2) {
+                const rowA = columnA[i] || '';
+                const rowB = columnA[i + 1] || '';
+                
+                result.push([rowA, rowB]);
+            }
+
+            return result;
+        }
+
+        function displayResults(data, originalCount) {
+            const tableBody = document.getElementById('tableBody');
+            const stats = document.getElementById('stats');
+
+            // 更新统计信息
+            stats.innerHTML = `
+                <div class="stats-item">
+                    <div class="stats-number">${originalCount}</div>
+                    <div>原始行数</div>
+                </div>
+                <div class="stats-item">
+                    <div class="stats-number">${data.length}</div>
+                    <div>处理后行数</div>
+                </div>
+                <div class="stats-item">
+                    <div class="stats-number">${Math.round((1 - data.length / originalCount) * 100)}%</div>
+                    <div>行数减少</div>
+                </div>
+            `;
+
+            // 更新表格
+            tableBody.innerHTML = '';
+            data.slice(0, 50).forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${row[0] || ''}</td>
+                    <td style="color: ${row[1] ? '#667eea' : '#999'};">${row[1] || '(空)'}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            if (data.length > 50) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td colspan="3" style="text-align: center; color: #999; font-style: italic;">
+                        ... 还有 ${data.length - 50} 行数据
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            }
+        }
+
+        // 下载功能
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            if (!processedData) return;
+
+            // 创建新的工作簿
+            const ws = XLSX.utils.aoa_to_sheet(processedData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "处理结果");
+
+            // 下载文件
+            const fileName = `${originalFileName}_processed.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+            showAlert('文件下载完成！');
+        });
+    </script>
+</body>
+</html>
